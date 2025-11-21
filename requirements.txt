@@ -1,0 +1,11 @@
+Flask
+pandas
+numpy
+scikit-learn
+joblib
+torchtuples
+pycox
+lifelines
+Flask-CORS
+gunicorn
+torch --index-url https://download.pytorch.org/whl/cpu
