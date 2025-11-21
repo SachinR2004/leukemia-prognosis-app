@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leukemia Prognosis</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>Leukemia Prognosis</h1>
+            <p class="subtitle">Advanced Survival Analysis & Risk Stratification</p>
+        </div>
+        <nav id="navbar">
+            <button class="nav-btn active" data-tab="home">Home</button>
+            <button class="nav-btn" data-tab="analysis">Prognosis Dashboard</button>
+            <button class="nav-btn" data-tab="risk">Risk Analysis</button>
+            <button class="nav-btn" data-tab="treatment">Treatment Options</button>
+            <button class="nav-btn" data-tab="trials">Clinical Trials</button>
+        </nav>
+    </header>
+
+    <main class="container">
+        
+        <section id="home" class="tab-content active">
+            
+            <div class="hero-modern">
+                <div class="hero-badge">Leukemia Prognostics</div>
+                <h2 class="gradient-text">Predict. Analyze. Optimize.</h2>
+                <p class="hero-subtext">
+                    A prognostic tool designed specifically for <strong>Acute Myeloid Leukemia (AML)</strong>. 
+                    Transform complex clinical data into survival insights.
+                </p>
+                <button class="btn-glow" onclick="document.querySelector('[data-tab=\'analysis\']').click()">
+                    Launch Analysis <span>&rarr;</span>
+                </button>
+            </div>
+
+            <div class="glass-panel" style="margin-bottom: 40px; max-width: 1000px; margin-left: auto; margin-right: auto;">
+                <h3 style="text-align: center; margin-bottom: 30px; border: none;">Clinical Context: Leukemia & AML</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start;">
+                    <div>
+                        <h4 style="color: var(--text-dark); margin-bottom: 10px; font-size: 1.1rem;">Pathophysiology</h4>
+                        <p style="line-height: 1.6; color: var(--text-medium); margin-bottom: 20px;">
+                            Leukemia is a cancer of the blood and bone marrow in which abnormal white blood cells multiply uncontrollably, crowding out healthy red blood cells and platelets. This leads to anemia and fatigue from low red cells, easy bruising and bleeding from low platelets, and frequent infections due to ineffective white blood cells.
+                        </p>
+                        
+                        <h4 style="color: var(--text-dark); margin-bottom: 10px; font-size: 1.1rem;">The 4 Main Classifications</h4>
+                        <ul class="marker-list">
+                            <li>
+                                <strong>Acute Myeloid Leukemia (AML)</strong>
+                                <span>Rapid progression; affects myeloid line. (Focus of this tool)</span>
+                            </li>
+                            <li>
+                                <strong>Acute Lymphoblastic Leukemia (ALL)</strong>
+                                <span>Rapid progression; affects lymphoid line.</span>
+                            </li>
+                            <li>
+                                <strong>Chronic Myeloid Leukemia (CML)</strong>
+                                <span>Slow progression; affects myeloid line.</span>
+                            </li>
+                            <li>
+                                <strong>Chronic Lymphocytic Leukemia (CLL)</strong>
+                                <span>Slow progression; affects lymphoid line.</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 style="color: var(--text-dark); margin-bottom: 10px; font-size: 1.1rem;">Why Focus on AML?</h4>
+                        <p style="line-height: 1.6; color: var(--text-medium);">
+                            AML is the most common acute leukemia in adults and presents significant prognostic challenges. Outcomes vary wildly based on cytogenetics and molecular abnormalities.
+                        </p>
+                        <p style="line-height: 1.6; color: var(--text-medium); margin-top: 15px;">
+                            This platform uses Deep Learning to integrate <strong>Age, Blast Percentage, FLT3-ITD mutations, and Transplant status</strong> to provide personalized survival curves that outperform traditional staging systems.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cards-container">
+                
+                <div class="modern-card">
+                    <h3>Disease Pathology</h3>
+                    <p>Visualizing the disruption of hematopoiesis in the bone marrow environment.</p>
+                    <div class="image-container">
+                         [Image of Acute Myeloid Leukemia cell]
+                    </div>
+                </div>
+
+                <div class="modern-card">
+                    <h3>Critical Biomarkers</h3>
+                    <ul class="clean-list">
+                        <li>
+                            <span class="marker-tag">FLT3-ITD</span>
+                            <small>High relapse risk mutation</small>
+                        </li>
+                        <li>
+                            <span class="marker-tag">NPM1</span>
+                            <small>Favorable without FLT3</small>
+                        </li>
+                        <li>
+                            <span class="marker-tag">BMBP</span>
+                            <small>Tumor burden indicator</small>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="modern-card">
+                    <h3>Treatment Pathways</h3>
+                    <p>From intensive induction chemotherapy to curative Allogeneic Stem Cell Transplantation (ASCT).</p>
+                    <div class="mini-stat">
+                        <strong>ASCT</strong> improves survival by up to <strong>40%</strong> in high-risk groups.
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section id="analysis" class="tab-content">
+            <div class="analysis-grid">
+                <div class="glass-panel input-section">
+                    <h3>Patient Profile</h3>
+                    <form id="prediction-form">
+                        <label>Age (Years) <output id="out-age">45</output></label>
+                        <input type="range" id="age" name="Age" min="18" max="99" value="45" oninput="document.getElementById('out-age').value=this.value">
+
+                        <label>BMBP (Blast %) <output id="out-bmbp">15</output></label>
+                        <input type="range" id="bmbp" name="BMBP" min="0" max="100" value="15" oninput="document.getElementById('out-bmbp').value=this.value">
+
+                        <label>Risk Classification</label>
+                        <select id="risk_class" name="Risk_Classification">
+                            <option value="1.0" selected>Favorable (1.0)</option>
+                            <option value="2.0">Intermediate (2.0)</option>
+                            <option value="3.0">Adverse (3.0)</option>
+                        </select>
+
+                        <label>FLT3.ITD Status</label>
+                        <select id="flt3" name="FLT3.ITD">
+                            <option value="0.0" selected>Wild Type (Negative)</option>
+                            <option value="1.0">Mutated (Positive)</option>
+                        </select>
+
+                        <label>Chemotherapy</label>
+                        <select id="chemo" name="Chemotherapy">
+                            <option value="1.0" selected>Yes</option>
+                            <option value="0.0">No</option>
+                        </select>
+
+                        <label>Gender</label>
+                        <select id="gender" name="Gender">
+                            <option value="0.0" selected>Male</option>
+                            <option value="1.0">Female</option>
+                        </select>
+
+                        <label>Transplant Status</label>
+                        <select id="transplant" name="Transplant">
+                            <option value="0.0">No Transplant</option>
+                            <option value="1.0" selected>Received Transplant</option>
+                        </select>
+
+                        <div class="model-select-group">
+                            <label class="group-label">AI Inference Engine</label>
+                            <div class="radio-options">
+                                <label class="radio-label">
+                                    <input type="radio" name="model_type" value="deephit"> 
+                                    DeepHit <span class="badge">Rec</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="model_type" value="loghazard" checked> 
+                                    Log Hazard
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="action-row">
+                            <button type="submit" id="run-btn" class="btn-primary">RUN ANALYSIS</button>
+                            <button type="button" id="reset-btn" class="btn-secondary">RESET</button>
+                        </div>
+                        <p id="status-msg">Ready to predict.</p>
+                    </form>
+                </div>
+
+                <div class="glass-panel output-section">
+                    <div class="prognosis-cards">
+                        <div class="stat-card">
+                            <h4 id="card-title-1">Risk Stratification</h4>
+                            <span class="value val-neutral" id="res-value-1">--</span>
+                        </div>
+                        <div class="stat-card">
+                            <h4 id="card-title-2">Peak Risk Window</h4>
+                            <span class="value val-neutral" id="res-value-2">--</span>
+                        </div>
+                        <div class="stat-card">
+                            <h4 id="card-title-3">Cohort Standing</h4>
+                            <span class="value val-neutral" id="res-value-3">--</span>
+                        </div>
+                        <div class="stat-card">
+                            <h4 id="card-title-4">Condition Severity</h4>
+                            <span class="value val-neutral" id="res-value-4">--</span>
+                        </div>
+                    </div>
+                    <div class="drivers-section">
+                        <h4>Clinical Drivers</h4>
+                        <div id="drivers-list" class="drivers-container">
+                            <span class="driver-placeholder">Run analysis to identify key clinical drivers.</span>
+                        </div>
+                    </div>
+                    <div class="charts-grid">
+                        <div class="chart-wrapper main-chart">
+                            <div id="survival-plot" style="height: 400px;"></div>
+                        </div>
+                        <div class="chart-wrapper sub-chart">
+                            <div id="radar-plot" style="height: 400px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="risk" class="tab-content">
+            <div class="glass-panel">
+                <h2>Cohort Risk Analysis</h2>
+                <p class="intro-text">Explore how specific clinical and genetic factors influence survival probabilities across the entire patient cohort.</p>
+                <div id="km-plot" style="height: 500px; width: 100%;"></div>
+            </div>
+        </section>
+        
+        <section id="treatment" class="tab-content">
+            <div class="analysis-grid">
+                <div class="glass-panel input-section">
+                    <h3>Treatment Simulation</h3>
+                    <p style="color:var(--text-medium); margin-bottom: 20px;">
+                        Compare projected survival outcomes between standard Chemotherapy and Allogeneic Stem Cell Transplantation (ASCT) for this specific patient profile.
+                    </p>
+                    <div class="model-select-group" style="background: rgba(255,255,255,0.9);">
+                        <h4 style="margin-top:0; color:var(--text-dark);">Current Patient Profile</h4>
+                        <ul id="tx-profile-summary" style="padding-left:20px; color:var(--text-medium); font-size:0.9rem;">
+                            <li>Please run a prediction on the Dashboard first.</li>
+                        </ul>
+                    </div>
+                    <button id="run-tx-btn" class="btn-primary" style="width:100%; margin-top:10px;">SIMULATE OUTCOMES</button>
+                </div>
+                <div class="glass-panel output-section">
+                    <div class="prognosis-cards" style="grid-template-columns: 1fr 1fr;">
+                        <div class="stat-card">
+                            <h4>Transplant Survival Gain (2-Yr)</h4>
+                            <span class="value val-neutral" id="tx-benefit">--%</span>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Median Survival Gain</h4>
+                            <span class="value val-neutral" id="tx-median-gain">-- Days</span>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper main-chart">
+                        <div id="treatment-plot" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="trials" class="tab-content">
+            <div class="glass-panel">
+                <h3>Clinical Trial Matching</h3>
+                <p class="intro-text">
+                    Based on the patient's profile (Age: <span id="trial-age-display">--</span>, FLT3: <span id="trial-flt3-display">--</span>), the following active trials may be relevant:
+                </p>
+                <div class="action-row" style="margin-bottom: 20px;">
+                    <button id="find-trials-btn" class="btn-primary">FIND MATCHING TRIALS</button>
+                </div>
+                <div id="trials-results" class="drivers-container" style="flex-direction: column; gap: 15px;">
+                    <div class="stat-card" style="text-align: left; color: var(--text-medium);">
+                        No trials loaded. Click "Find Matching Trials" to search the database.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
