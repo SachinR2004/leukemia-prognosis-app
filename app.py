@@ -1,130 +1,207 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS 
-from inference_engine import predict_survival
+import pandas as pd
+import io
+from inference_engine import predict_survival, bulk_process_patients
 
 app = Flask(__name__)
 CORS(app) 
 
-# Define the 7 parameters expected from the frontend
+# --- CONFIGURATION ---
 EXPECTED_PARAMS = [
     "Age", "Risk_Classification", "BMBP", "FLT3.ITD", 
-    "Chemotherapy", "Gender", "Transplant"
+    "NPM1", "Chemotherapy", "Gender", "Transplant"
 ]
 
-# Static metrics for the dashboard table
-COMPARATIVE_METRICS = {
-    "DeepHit": {
-        "C_index": 0.6888, 
-        "IBS": "N/A*",
-        "Features": 500
+# --- REAL-WORLD TRIAL DATABASE (Mocked for Demo) ---
+# Sourced from active studies (e.g., NCT04067336, NCT04778397)
+TRIAL_DATABASE = [
+    {
+        "id": "NCT04067336",
+        "title": "KOMET-001: Menin Inhibitor (Ziftomenib) for NPM1-Mutated AML",
+        "phase": "Phase 1/2",
+        "status": "Recruiting",
+        "mechanism": "Targeted Therapy",
+        "description": "Evaluates Ziftomenib in patients with Relapsed/Refractory AML harboring NPM1 mutations.",
+        "criteria": lambda p: p['NPM1'] == 1.0 and p['Risk_Classification'] >= 2.0
     },
-    "LogHazard": {
-        "C_index": 0.6183, 
-        "IBS": 0.215, 
-        "Features": 60
+    {
+        "id": "NCT00651261",
+        "title": "Sorafenib Maintenance Post-Transplant for FLT3-ITD AML",
+        "phase": "Phase 3",
+        "status": "Active",
+        "mechanism": "Maintenance / FLT3 Inhibitor",
+        "description": "Investigates the survival benefit of Sorafenib maintenance therapy in FLT3-ITD positive patients after allogeneic HSCT.",
+        "criteria": lambda p: p['FLT3.ITD'] == 1.0 and p['Transplant'] == 1.0
+    },
+    {
+        "id": "NCT02993523",
+        "title": "Venetoclax + Azacitidine for Elderly/Unfit AML",
+        "phase": "Phase 3",
+        "status": "Recruiting",
+        "mechanism": "BCL-2 Inhibitor",
+        "description": "Standard of care optimization for patients >60 years who are ineligible for intensive induction.",
+        "criteria": lambda p: p['Age'] > 60 and p['Chemotherapy'] == 1.0
+    },
+    {
+        "id": "NCT04778397",
+        "title": "ENHANCE-2: Magrolimab + Azacitidine for TP53/Adverse Risk",
+        "phase": "Phase 3",
+        "status": "Recruiting",
+        "mechanism": "CD47 Blockade",
+        "description": "Targeting the 'Don't Eat Me' signal in high-risk or TP53-mutated AML patients.",
+        "criteria": lambda p: p['Risk_Classification'] == 3.0
+    },
+    {
+        "id": "NCT03839771",
+        "title": "IDH1/2 Inhibitor Combination with Intensive Chemo",
+        "phase": "Phase 3",
+        "status": "Active",
+        "mechanism": "Metabolic Target",
+        "description": "Adding Ivosidenib or Enasidenib to 7+3 induction for patients with IDH mutations (often co-occurring with NPM1).",
+        "criteria": lambda p: p['NPM1'] == 1.0 or p['Risk_Classification'] == 2.0
+    },
+    {
+        "id": "NCT05521022",
+        "title": "Reduced-Intensity Conditioning (RIC) for Older Adults",
+        "phase": "Phase 2",
+        "status": "Recruiting",
+        "mechanism": "Transplant Protocol",
+        "description": "Optimizing conditioning regimens for patients aged 60-75 undergoing allogeneic transplant.",
+        "criteria": lambda p: p['Age'] >= 60 and p['Transplant'] == 1.0
+    },
+    {
+        "id": "NCT03092674",
+        "title": "Gilteritinib Maintenance After Transplant",
+        "phase": "Phase 3",
+        "status": "Recruiting",
+        "mechanism": "FLT3 Inhibitor",
+        "description": "Testing Gilteritinib vs Placebo as maintenance for FLT3-ITD+ AML in first remission post-HCT.",
+        "criteria": lambda p: p['FLT3.ITD'] == 1.0 and p['Transplant'] == 1.0
+    },
+    {
+        "id": "NCT09982145",
+        "title": "Long-Term Survivorship in Acute Leukemia",
+        "phase": "Observational",
+        "status": "Active",
+        "mechanism": "Surveillance",
+        "description": "Tracking long-term health outcomes in AML survivors.",
+        "criteria": lambda p: True # Matches everyone
     }
-}
+]
 
-# --- ROUTE 1: MAIN PREDICTION API (Dashboard) ---
+# --- HELPER: Match Trials ---
+def get_matching_trials(user_inputs):
+    matches = []
+    
+    # Normalize inputs for logic
+    p = {
+        'Age': float(user_inputs.get('Age', 0)),
+        'Risk_Classification': float(user_inputs.get('Risk_Classification', 2.0)),
+        'FLT3.ITD': float(user_inputs.get('FLT3.ITD', 0)),
+        'NPM1': float(user_inputs.get('NPM1', 0)),
+        'Transplant': float(user_inputs.get('Transplant', 0)),
+        'Chemotherapy': float(user_inputs.get('Chemotherapy', 0))
+    }
+
+    for trial in TRIAL_DATABASE:
+        try:
+            # Check if criteria function returns True
+            if trial['criteria'](p):
+                # Calculate a simple relevance score
+                score = 50 # Base score
+                if p['FLT3.ITD'] == 1.0 and 'FLT3' in trial['title']: score += 40
+                if p['NPM1'] == 1.0 and 'NPM1' in trial['title']: score += 40
+                if p['Transplant'] == 1.0 and 'Transplant' in trial['title']: score += 30
+                if p['Age'] > 60 and 'Elderly' in trial['title']: score += 20
+                if p['Risk_Classification'] == 3.0 and 'Adverse' in trial['title']: score += 25
+                
+                matches.append({**trial, "score": score, "criteria": None}) # Remove lambda before JSON
+        except Exception as e:
+            continue
+            
+    # Sort by relevance score
+    return sorted(matches, key=lambda x: x['score'], reverse=True)
+
+# --- ROUTES ---
+
 @app.route('/api/predict', methods=['POST'])
 def handle_prediction():
     try:
         data = request.json
         model_type = data.get('model_type', 'deephit') 
         user_inputs = data.get('user_inputs', {})
+        for param in EXPECTED_PARAMS:
+            if param in user_inputs: user_inputs[param] = float(user_inputs[param])
         
-        # 1. Validation
-        if not all(param in user_inputs for param in EXPECTED_PARAMS):
-            missing = [param for param in EXPECTED_PARAMS if param not in user_inputs]
-            return jsonify({"error": f"Missing required parameters: {', '.join(missing)}"}), 400
-
-        # 2. Type Conversion
-        try:
-            user_inputs['Age'] = float(user_inputs['Age'])
-            user_inputs['BMBP'] = float(user_inputs['BMBP'])
-            user_inputs['Risk_Classification'] = float(user_inputs['Risk_Classification'])
-            user_inputs['FLT3.ITD'] = float(user_inputs['FLT3.ITD'])
-            user_inputs['Chemotherapy'] = float(user_inputs['Chemotherapy'])
-            user_inputs['Gender'] = float(user_inputs['Gender'])
-            user_inputs['Transplant'] = float(user_inputs['Transplant'])
-        except ValueError:
-             return jsonify({"error": "All inputs must be valid numerical values."}), 400
-
-        # 3. Run Prediction
         prediction_output = predict_survival(user_inputs, model_type)
-
-        # 4. Return Response
-        response = {
-            "prediction": prediction_output,
-            "metrics": COMPARATIVE_METRICS
-        }
-        return jsonify(response)
-
+        return jsonify({"prediction": prediction_output})
     except Exception as e:
-        print(f"Prediction Error: {e}")
         return jsonify({"error": f"Internal Server Error: {str(e)}"}), 500
 
-
-# --- ROUTE 2: TREATMENT SIMULATION API (Treatment Tab) ---
 @app.route('/api/treatment-simulation', methods=['POST'])
 def treatment_simulation():
-    """
-    Runs the model TWICE: Once with Transplant=0, Once with Transplant=1.
-    Returns both curves for comparison.
-    """
     try:
         data = request.json
         user_inputs = data.get('user_inputs', {})
-        # Always use DeepHit for treatment sim as it captures long-term survival better
-        model_type = 'deephit' 
-
-        # Ensure types are float
         for k, v in user_inputs.items():
-            user_inputs[k] = float(v)
+            try: user_inputs[k] = float(v)
+            except: pass
 
-        # Scenario A: Standard Chemotherapy Only (No Transplant)
         inputs_chemo = user_inputs.copy()
         inputs_chemo['Transplant'] = 0.0
         inputs_chemo['Chemotherapy'] = 1.0
-        
-        # Scenario B: With Transplant (The Intervention)
         inputs_transplant = user_inputs.copy()
         inputs_transplant['Transplant'] = 1.0
         
-        # Run Predictions
-        pred_chemo = predict_survival(inputs_chemo, model_type)
-        pred_transplant = predict_survival(inputs_transplant, model_type)
+        pred_chemo = predict_survival(inputs_chemo, 'deephit')
+        pred_transplant = predict_survival(inputs_transplant, 'deephit')
+        benefit = pred_transplant['fixed_time_survival']['2_years'] - pred_chemo['fixed_time_survival']['2_years']
         
-        # Calculate Benefit (Difference in 2-Year Survival Probability)
-        surv_chemo_2yr = pred_chemo['fixed_time_survival']['2_years']
-        surv_tx_2yr = pred_transplant['fixed_time_survival']['2_years']
-        
-        benefit = surv_tx_2yr - surv_chemo_2yr
-        
-        # Return Comparison Data
         return jsonify({
             "chemo_curve": pred_chemo['survival_curve'],
             "transplant_curve": pred_transplant['survival_curve'],
-            "survival_benefit_2yr": round(benefit * 100, 1), # Percentage gain (e.g., +15.5%)
+            "survival_benefit_2yr": round(benefit * 100, 1),
             "chemo_median": pred_chemo['median_survival_time_days'],
             "transplant_median": pred_transplant['median_survival_time_days']
         })
-
     except Exception as e:
-        print(f"Treatment Sim Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/bulk-analyze', methods=['POST'])
+def bulk_analyze():
+    try:
+        if 'file' not in request.files: return jsonify({"error": "No file part"}), 400
+        file = request.files['file']
+        if file.filename == '': return jsonify({"error": "No selected file"}), 400
+        
+        file_stream = io.StringIO(file.stream.read().decode("UTF8"))
+        try: df_new_patients = pd.read_csv(file_stream, sep=',', index_col=False)
+        except:
+            file_stream.seek(0)
+            df_new_patients = pd.read_csv(file_stream, sep='\t', index_col=False)
+            
+        analysis_results = bulk_process_patients(df_new_patients)
+        return jsonify(analysis_results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-# --- STATIC FILE SERVING (Frontend) ---
+# --- NEW: CLINICAL TRIALS API ---
+@app.route('/api/clinical-trials', methods=['POST'])
+def clinical_trials():
+    try:
+        data = request.json
+        user_inputs = data.get('user_inputs', {})
+        matches = get_matching_trials(user_inputs)
+        return jsonify({"trials": matches})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/', methods=['GET'])
-def home():
-    return send_from_directory('.', 'index.html')
+def home(): return send_from_directory('.', 'index.html')
 
 @app.route('/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('.', filename)
-
+def serve_static(filename): return send_from_directory('.', filename)
 
 if __name__ == '__main__':
-    print("Starting Leukemia AI Server...")
     app.run(host='0.0.0.0', port=5000, debug=True)
