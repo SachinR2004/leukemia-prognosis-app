@@ -2,417 +2,372 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Configuration ---
     const API_URL = '/api/predict';
     const TX_API_URL = '/api/treatment-simulation';
-
-    // --- UI Elements ---
+    const TRIALS_API_URL = '/api/clinical-trials';
+    
     const form = document.getElementById('prediction-form');
     const resetBtn = document.getElementById('reset-btn');
     const runBtn = document.getElementById('run-btn');
     const statusMsg = document.getElementById('status-msg');
     const driversList = document.getElementById('drivers-list');
 
-    // Prognosis Card Elements
     const cards = [1, 2, 3, 4].map(i => ({
         title: document.getElementById(`card-title-${i}`),
-        value: document.getElementById(`res-value-${i}`)
+        value: document.getElementById(`res-value-${i}`),
+        container: document.getElementById(`card-title-${i}`).parentElement 
     }));
 
-    // --- PLOTLY LAYOUT SETTINGS (Light Theme) ---
     const LIGHT_LAYOUT = {
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)',
         font: { color: '#334155', family: 'Inter, sans-serif' },
-        xaxis: { 
-            gridcolor: '#f1f5f9', showline: true, 
-            linecolor: '#cbd5e1', zerolinecolor: '#cbd5e1'
-        },
-        yaxis: { 
-            gridcolor: '#f1f5f9', showline: true, 
-            linecolor: '#cbd5e1', zerolinecolor: '#cbd5e1',
-            range: [0, 1.05] 
-        },
+        xaxis: { gridcolor: '#f1f5f9', showline: true, linecolor: '#cbd5e1', zerolinecolor: '#cbd5e1' },
+        yaxis: { gridcolor: '#f1f5f9', showline: true, linecolor: '#cbd5e1', zerolinecolor: '#cbd5e1', range: [0, 1.05] },
         margin: { t: 50, b: 50, l: 60, r: 40 },
         legend: { orientation: 'h', y: 1.1 }
     };
 
-    // =================================================
-    // PART 1: PROGNOSIS DASHBOARD CHARTS
-    // =================================================
+    // --- Helper: Calculate RMST ---
+    function calculateRMST(curve, maxDays=1825) {
+        let area = 0;
+        for (let i = 0; i < curve.length - 1; i++) {
+            let t1 = curve[i].time;
+            let t2 = curve[i+1].time;
+            if (t1 >= maxDays) break; 
+            let p1 = curve[i].probability;
+            let p2 = curve[i+1].probability;
+            let dt = Math.min(t2, maxDays) - t1;
+            if (dt > 0) area += dt * (p1 + p2) / 2;
+        }
+        let years = area / 365;
+        return years.toFixed(1) + " Years";
+    }
 
+    // --- Charts ---
     function renderPrimaryPlot(data, hazardData, modelType) {
         const time = data.map(d => d.time);
         const survivalProb = data.map(d => d.probability);
         const traces = [];
         
-        // Trace 1: Survival Curve
-        traces.push({
-            x: time, y: survivalProb, mode: 'lines', fill: 'tozeroy',
-            name: 'Survival S(t)',
-            line: { color: modelType === 'deephit' ? '#111111' : '#10b981', width: 3 }
-        });
-
-        // Trace 2: Hazard Curve (Log Hazard Only)
-        let layout = JSON.parse(JSON.stringify(LIGHT_LAYOUT)); 
-        
-        if (modelType === 'loghazard' && hazardData && hazardData.length > 0) {
-            traces.push({
-                x: hazardData.map(d => d.time),
-                y: hazardData.map(d => d.probability * 10),
-                mode: 'lines', name: 'Event Risk Density',
-                line: { color: '#ef4444', width: 2, dash: 'dot' },
-                yaxis: 'y2'
-            });
-
-            layout.yaxis2 = {
-                title: 'Risk Intensity', overlaying: 'y', side: 'right',
-                showgrid: false, range: [0, 1], font: { color: '#ef4444' }
-            };
-            layout.margin.r = 60; 
+        if (modelType === 'loghazard') {
+            const riskProb = survivalProb.map(p => 1 - p);
+            traces.push({ x: time, y: survivalProb, mode: 'lines', fill: 'tozeroy', name: 'Survival', line: { color: '#10b981', width: 0 }, fillcolor: 'rgba(16, 185, 129, 0.6)' });
+            traces.push({ x: time, y: riskProb, mode: 'lines', name: 'Risk', line: { color: '#ef4444', width: 3 }, fill: 'tonexty' });
+        } else {
+            const finalProb = survivalProb[survivalProb.length - 1];
+            const lineColor = finalProb > 0.5 ? '#10b981' : '#ef4444';
+            const fillColor = finalProb > 0.5 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.2)';
+            traces.push({ x: time, y: survivalProb, mode: 'lines', fill: 'tozeroy', name: 'Survival S(t)', line: { color: lineColor, width: 4 }, fillcolor: fillColor });
         }
 
-        layout.title = { 
-            text: modelType === 'deephit' ? 'Long-Term Survival Projection' : 'Survival vs. Event Risk Timing',
-            font: { size: 16 }
-        };
-        layout.xaxis.title = 'Time (Days)';
-        layout.yaxis.title = 'Survival Probability';
-
+        let layout = JSON.parse(JSON.stringify(LIGHT_LAYOUT)); 
+        layout.title = { text: modelType === 'deephit' ? 'Projected Survival Trajectory' : 'Survival vs. Cumulative Risk', font: { size: 16 } };
+        layout.xaxis.title = 'Time (Days)'; layout.yaxis.title = 'Probability';
         Plotly.newPlot('survival-plot', traces, layout, {displayModeBar: false, responsive: true});
     }
 
     function renderRadarPlot(inputs) {
         const normAge = inputs['Age'] / 100;
         const normBMBP = inputs['BMBP'] / 100;
-        const normRisk = inputs['Risk_Classification'] / 3;
+        const normNPM1 = inputs['NPM1'] === '1.0' ? 1 : 0; 
         
-        const data = [{
-            type: 'scatterpolar',
-            r: [normAge, normBMBP, normRisk, inputs['FLT3.ITD'], inputs['Transplant'], normAge],
-            theta: ['Age', 'BMBP', 'Risk', 'FLT3', 'Transplant', 'Age'],
-            fill: 'toself', name: 'Patient Profile',
-            line: { color: '#2563eb' }, fillcolor: 'rgba(37, 99, 235, 0.2)'
+        const data = [{ 
+            type: 'scatterpolar', 
+            r: [normAge, normBMBP, inputs['FLT3.ITD'], inputs['Transplant'], normNPM1, normAge], 
+            theta: ['Age', 'BMBP', 'FLT3', 'Transplant', 'NPM1', 'Age'], 
+            fill: 'toself', name: 'Patient Profile', line: { color: '#111111' }, fillcolor: 'rgba(17, 17, 17, 0.2)' 
         }];
-
-        const layout = {
-            polar: {
-                radialaxis: { visible: true, range: [0, 1], gridcolor: '#e2e8f0' },
-                angularaxis: { color: '#334155' },
-                bgcolor: 'rgba(0,0,0,0)'
-            },
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            font: { color: '#334155', family: 'Inter, sans-serif' },
-            margin: { t: 30, b: 30, l: 40, r: 40 },
-            showlegend: false,
-            title: { text: 'Patient Biomarker Profile', font: {size: 14} }
-        };
-
+        
+        const layout = { polar: { radialaxis: { visible: true, range: [0, 1], gridcolor: '#e2e8f0' }, angularaxis: { color: '#334155' }, bgcolor: 'rgba(0,0,0,0)' }, paper_bgcolor: 'rgba(0,0,0,0)', font: { color: '#334155', family: 'Inter, sans-serif' }, margin: { t: 30, b: 30, l: 40, r: 40 }, showlegend: false, title: { text: 'Patient Biomarker Profile', font: {size: 14} } };
         Plotly.newPlot('radar-plot', data, layout, {displayModeBar: false, responsive: true});
     }
 
-    // =================================================
-    // PART 2: LOGIC FOR METRICS & API
-    // =================================================
+    function generateBoldAnalysis(pred, userInputs, rmst) {
+        const riskGroup = pred.risk_group;
+        const riskScore = (pred.raw_risk_score_2yr * 100).toFixed(1);
+        const isTransplant = userInputs['Transplant'] === '1.0';
+        const isNPM1 = userInputs['NPM1'] === '1.0';
+        
+        let html = "";
+        if (riskGroup === 'Low Risk') {
+            html += `<strong>STATUS: STABLE.</strong> Excellent prognosis with an expected survival of <strong>${rmst}</strong> (over next 5 years). `;
+        } else if (riskGroup === 'Intermediate') {
+            html += `<strong>STATUS: GUARDED.</strong> Moderate risk profile (${riskScore}% 2-year risk). Expected survival: <strong>${rmst}</strong>. `;
+        } else {
+            html += `<strong>STATUS: CRITICAL.</strong> High-risk profile detected. Expected survival is limited to <strong>${rmst}</strong> without intervention. `;
+        }
+        
+        html += "<br><br>";
+        if (isTransplant) {
+            html += "✅ <strong>Transplant Effect:</strong> The Allogeneic Stem Cell Transplant is successfully buffering the genetic risk factors.";
+        } else if (isNPM1) {
+            html += "🧬 <strong>Genetics:</strong> Presence of NPM1 mutation is a favorable prognostic indicator, improving treatment response.";
+        } else if (riskGroup !== 'Low Risk') {
+            html += "⚠️ <strong>Intervention Needed:</strong> Absence of transplant and adverse cytogenetics are primary drivers of this risk.";
+        }
+        return html;
+    }
 
     function updateMetricsDashboard(pred, userInputs, modelType) {
-        if (modelType === 'deephit') {
-            // DeepHit Metrics
-            cards[0].title.textContent = "Overall Prognosis";
-            cards[0].value.textContent = pred.risk_group === 'Low Risk' ? 'Favorable' : 'Guarded';
-            cards[0].value.className = `value ${pred.risk_group === 'Low Risk' ? 'val-low' : 'val-high'}`;
+        const bmbpVal = parseFloat(userInputs['BMBP']);
+        const ageVal = parseFloat(userInputs['Age']);
+        const riskVal = 2.0; 
+        
+        // Severity Score
+        const ageFactor = ageVal > 60 ? 30 : (ageVal > 40 ? 15 : 0);
+        const severityScore = (riskVal * 20) + (bmbpVal * 0.5) + ageFactor;
+        
+        let sevText = "Moderate";
+        let sevClass = "val-neutral";
+        if (severityScore >= 80) { sevText = "Aggressive"; sevClass = "val-high"; }
+        else if (severityScore <= 50) { sevText = "Indolent"; sevClass = "val-low"; }
+        
+        const curve = pred.survival_curve;
 
-            const curve = pred.survival_curve;
-            const maxTime = curve[curve.length-1].time;
-            const lastProb = curve[curve.length-1].probability;
-            
-            cards[1].title.textContent = "5-Year Survival Rate";
-            cards[1].value.textContent = maxTime >= 1800 ? (lastProb * 100).toFixed(1) + "%" : "N/A (< 5yr data)";
+        // --- DEEP HIT METRICS ---
+        if (modelType === 'deephit') {
+            cards.forEach(c => c.container.style.display = 'block');
+
+            cards[0].title.textContent = "2-Year Survival";
+            const prob2yr = (1 - pred.raw_risk_score_2yr) * 100;
+            cards[0].value.textContent = prob2yr.toFixed(1) + "%";
+            cards[0].value.className = prob2yr > 70 ? "value val-low" : (prob2yr < 40 ? "value val-high" : "value val-neutral");
+
+            // Median Survival in Years
+            cards[1].title.textContent = "Median Survival Estimate";
+            const medianPoint = curve.find(p => p.probability <= 0.5);
+            let medianText = "> 5 Years";
+            if (medianPoint) {
+                const years = (medianPoint.time / 365).toFixed(1);
+                medianText = `${years} Years`;
+            }
+            cards[1].value.textContent = medianText;
             cards[1].value.className = "value val-neutral";
 
-            cards[2].title.textContent = "Median Survival";
-            cards[2].value.textContent = `${pred.median_survival_time_days} Days`;
-            cards[2].value.className = "value val-neutral";
+            // Disease Indolence
+            cards[2].title.textContent = "Disease Indolence";
+            const p1 = curve.find(p => p.time >= 365)?.probability || 1.0;
+            const p5 = curve.find(p => p.time >= 1800)?.probability || 0.0;
+            const drop = p1 - p5;
+            let indolenceText = "Moderate";
+            let indolenceClass = "val-neutral";
+            if (drop < 0.15 && p5 > 0.5) { indolenceText = "High (Stable)"; indolenceClass = "val-low"; }
+            else if (drop > 0.4) { indolenceText = "Low (Aggressive)"; indolenceClass = "val-high"; }
+            cards[2].value.textContent = indolenceText;
+            cards[2].value.className = `value ${indolenceClass}`;
+            cards[2].value.style.fontSize = "1.3rem";
 
-            cards[3].title.textContent = "Response Potential";
-            const isTransplant = userInputs['Transplant'] === '1.0';
-            cards[3].value.textContent = isTransplant ? "High" : "Moderate";
-            cards[3].value.className = isTransplant ? "value val-low" : "value val-neutral";
-        
+            // Condition Severity
+            cards[3].title.textContent = "Condition Severity";
+            cards[3].value.textContent = sevText;
+            cards[3].value.className = `value ${sevClass}`;
+
+        // --- LOG HAZARD METRICS ---
         } else {
-            // Log Hazard Metrics
+            cards[3].container.style.display = 'none'; // Hide 4th card
+            
             cards[0].title.textContent = "Risk Stratification";
             cards[0].value.textContent = pred.risk_group;
             cards[0].value.className = `value ${pred.risk_css}`;
 
-            let maxDrop = 0; let peakTime = 0;
-            const curve = pred.survival_curve;
-            for(let i = 0; i < curve.length - 1; i++) {
-                let drop = curve[i].probability - curve[i+1].probability;
-                if (drop > maxDrop) { maxDrop = drop; peakTime = curve[i].time; }
-            }
-            cards[1].title.textContent = "Peak Risk Window";
-            cards[1].value.textContent = peakTime < 90 ? `Early (Day ${peakTime.toFixed(0)})` : `Late (Day ${peakTime.toFixed(0)})`;
-            cards[1].value.className = "value val-neutral";
+            const prob1yr = curve.find(p => p.time >= 365)?.probability || 1.0;
+            const relapseRisk = ((1 - prob1yr) * 100).toFixed(1) + "%";
+            cards[1].title.textContent = "1-Year Relapse Risk";
+            cards[1].value.textContent = relapseRisk;
+            cards[1].value.className = (1-prob1yr) > 0.4 ? "value val-high" : "value val-low";
 
             const percentile = Math.round((1 - pred.raw_risk_score_2yr) * 100);
-            let cohortLabel = percentile > 75 ? `Top ${100-percentile}%` : (percentile < 25 ? `Bottom ${percentile}%` : "Average");
-            let cohortClass = percentile > 75 ? "val-low" : (percentile < 25 ? "val-high" : "val-neutral");
-            
+            let cohortLabel = percentile > 75 ? `Top ${100-percentile}%` : "Average";
             cards[2].title.textContent = "Cohort Standing";
             cards[2].value.textContent = cohortLabel;
-            cards[2].value.className = `value ${cohortClass}`;
-
-            const riskVal = parseFloat(userInputs['Risk_Classification']);
-            const bmbpVal = parseFloat(userInputs['BMBP']);
-            const severityScore = (riskVal * 20) + (bmbpVal * 0.5);
-            let sevText = severityScore > 80 ? "Aggressive" : (severityScore < 40 ? "Indolent" : "Moderate");
-            let sevClass = severityScore > 80 ? "val-high" : (severityScore < 40 ? "val-low" : "val-neutral");
-
-            cards[3].title.textContent = "Condition Severity";
-            cards[3].value.textContent = sevText;
-            cards[3].value.className = `value ${sevClass}`;
+            cards[2].value.className = "value val-neutral";
+            cards[2].value.style.fontSize = "1.4rem";
         }
+        
+        const rmst = calculateRMST(curve);
+        const analysisHtml = generateBoldAnalysis(pred, userInputs, rmst);
+        document.getElementById('bold-analysis-text').innerHTML = analysisHtml;
+        document.getElementById('bold-analysis-container').style.display = 'block';
     }
 
+    // --- PREDICTION HANDLER ---
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         runBtn.disabled = true;
         runBtn.innerHTML = 'Processing...';
         statusMsg.textContent = 'Running AI Inference...';
-        statusMsg.style.color = 'var(--primary-brand)';
-
         const formData = new FormData(form);
-        const modelType = formData.get('model_type');
         const userInputs = {};
+        ['Age', 'BMBP', 'FLT3.ITD', 'NPM1', 'Chemotherapy', 'Gender', 'Transplant'].forEach(key => { userInputs[key] = formData.get(key); });
         
-        ['Age', 'Risk_Classification', 'BMBP', 'FLT3.ITD', 'Chemotherapy', 'Gender', 'Transplant'].forEach(key => {
-            userInputs[key] = formData.get(key);
-        });
+        // AUTO-CALCULATE RISK
+        // Simple logic: FLT3=1 -> Adverse(3.0), NPM1=1 -> Favorable(1.0), Else -> Intermediate(2.0)
+        if (userInputs['FLT3.ITD'] === '1.0') userInputs['Risk_Classification'] = '3.0';
+        else if (userInputs['NPM1'] === '1.0') userInputs['Risk_Classification'] = '1.0';
+        else userInputs['Risk_Classification'] = '2.0';
 
         try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model_type: modelType,
-                    user_inputs: userInputs
-                })
-            });
-
+            const response = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_type: formData.get('model_type'), user_inputs: userInputs }) });
             const res = await response.json();
-
             if (response.ok) {
-                const pred = res.prediction;
-                updateMetricsDashboard(pred, userInputs, modelType);
-
-                if (driversList) {
-                    driversList.innerHTML = pred.drivers.map(d => 
-                        `<span class="driver-tag ${d.includes('+') ? 'good' : 'bad'}">${d}</span>`
-                    ).join('');
-                }
-
-                renderPrimaryPlot(pred.survival_curve, pred.hazard_curve, modelType);
+                updateMetricsDashboard(res.prediction, userInputs, formData.get('model_type'));
+                if (driversList) driversList.innerHTML = res.prediction.drivers.map(d => `<span class="driver-tag ${d.includes('+') ? 'good' : 'bad'}">${d}</span>`).join('');
+                renderPrimaryPlot(res.prediction.survival_curve, res.prediction.hazard_curve, formData.get('model_type'));
                 renderRadarPlot(userInputs);
-                
                 statusMsg.textContent = 'Analysis Complete.';
-                statusMsg.style.color = 'var(--secondary-brand)';
-            } else {
-                statusMsg.textContent = `Error: ${res.error}`;
-                statusMsg.style.color = 'var(--risk-high)';
-            }
-        } catch (err) {
-            console.error(err);
-            statusMsg.textContent = 'Connection Failed. Is backend running?';
-            statusMsg.style.color = 'var(--risk-high)';
-        } finally {
-            runBtn.disabled = false;
-            runBtn.innerHTML = 'RUN ANALYSIS';
-        }
+            } else { statusMsg.textContent = `Error: ${res.error}`; }
+        } catch (err) { console.error(err); statusMsg.textContent = 'Connection Failed.'; } finally { runBtn.disabled = false; runBtn.innerHTML = 'RUN ANALYSIS'; }
     });
 
-    // =================================================
-    // PART 3: RISK FACTOR ANALYSIS (Tab 2)
-    // =================================================
-    const RISK_DATA = {
-        'flt3': {
-            title: 'Impact of FLT3-ITD Mutation',
-            desc: "Patients with FLT3-ITD mutations (Red) show significantly steeper survival decline in the first 24 months compared to Wild Type (Green).",
-            groups: [
-                { name: 'Wild Type', y: [1, 0.92, 0.85, 0.78, 0.72, 0.68, 0.65], color: '#10b981' },
-                { name: 'Mutated', y: [1, 0.80, 0.60, 0.45, 0.35, 0.25, 0.20], color: '#ef4444' }
-            ]
-        },
-        'transplant': {
-            title: 'Impact of Stem Cell Transplant',
-            desc: "Transplantation (Blue) serves as a curative option, stabilizing survival rates after 12 months, whereas non-transplant patients (Grey) face continued risk.",
-            groups: [
-                { name: 'Received Transplant', y: [1, 0.95, 0.92, 0.88, 0.85, 0.82, 0.80], color: '#2563eb' },
-                { name: 'No Transplant', y: [1, 0.85, 0.70, 0.55, 0.40, 0.30, 0.20], color: '#94a3b8' }
-            ]
-        },
-        'risk': {
-            title: 'Clinical Risk Classification',
-            desc: "Adverse risk (Red) correlates with rapid early progression, while Favorable risk (Green) maintains >70% survival at 5 years.",
-            groups: [
-                { name: 'Favorable', y: [1, 0.95, 0.90, 0.85, 0.80, 0.78, 0.75], color: '#10b981' },
-                { name: 'Intermediate', y: [1, 0.88, 0.75, 0.65, 0.55, 0.48, 0.45], color: '#f59e0b' },
-                { name: 'Adverse', y: [1, 0.70, 0.50, 0.35, 0.25, 0.15, 0.10], color: '#ef4444' }
-            ]
-        }
-    };
-
-    const kmPlotDiv = document.getElementById('km-plot');
-    if(kmPlotDiv) {
-        if (!document.getElementById('risk-controls')) {
-            const controlsDiv = document.createElement('div');
-            controlsDiv.id = 'risk-controls';
-            controlsDiv.style.marginBottom = '20px';
-            controlsDiv.innerHTML = `
-                <label for="risk-factor-select" style="font-weight:bold; color: var(--text-dark);">Select Cohort Factor:</label>
-                <select id="risk-factor-select" style="width:auto; display:inline-block; margin-left:10px;">
-                    <option value="flt3">FLT3-ITD Status</option>
-                    <option value="transplant">Transplant Status</option>
-                    <option value="risk">Risk Classification</option>
-                </select>
-                <p id="risk-desc" style="margin-top:10px; font-style:italic; color: var(--text-medium);"></p>
-            `;
-            kmPlotDiv.parentNode.insertBefore(controlsDiv, kmPlotDiv);
-        }
-        const renderRiskPlot = (key) => {
-            const data = RISK_DATA[key];
-            document.getElementById('risk-desc').textContent = data.desc;
-            const traces = data.groups.map(g => ({
-                x: [0, 12, 24, 36, 48, 60, 72], y: g.y,
-                mode: 'lines+markers', name: g.name,
-                line: { color: g.color, width: 3, shape: 'hv' }
-            }));
-            const layout = {
-                ...LIGHT_LAYOUT,
-                title: { text: data.title, font: {size: 16} },
-                xaxis: { ...LIGHT_LAYOUT.xaxis, title: 'Time (Months)' },
-                yaxis: { ...LIGHT_LAYOUT.yaxis, title: 'Survival Probability' },
-                margin: { t: 50, b: 50, l: 60, r: 20 }
-            };
-            Plotly.newPlot('km-plot', traces, layout, {displayModeBar: false, responsive: true});
-        };
-        renderRiskPlot('flt3');
-        document.getElementById('risk-factor-select').addEventListener('change', (e) => renderRiskPlot(e.target.value));
-    }
-
-    // =================================================
-    // PART 4: TREATMENT SIMULATION (Tab 3)
-    // =================================================
-
+    // --- TREATMENT SIMULATION ---
     const runTxBtn = document.getElementById('run-tx-btn');
-    
     if (runTxBtn) {
         const txProfileSummary = document.getElementById('tx-profile-summary');
-        const txBenefit = document.getElementById('tx-benefit');
-        const txMedianGain = document.getElementById('tx-median-gain');
+        const txRiskReduction = document.getElementById('tx-risk-reduction');
+        const txCureProb = document.getElementById('tx-cure-prob');
 
         runTxBtn.addEventListener('click', async () => {
-            // Robust Input Collection
-            const safeGetValue = (id) => {
-                const el = document.getElementById(id);
-                return el ? el.value : null;
-            };
-
+            const safeGetValue = (id) => { const el = document.getElementById(id); return el ? el.value : null; };
             const ageVal = safeGetValue('age');
-            const riskVal = safeGetValue('risk_class');
             const bmbpVal = safeGetValue('bmbp');
             const flt3Val = safeGetValue('flt3');
+            const npm1Val = safeGetValue('npm1');
             const chemoVal = safeGetValue('chemo');
             const genderVal = safeGetValue('gender');
 
-            if (!ageVal || !riskVal) {
-                alert("Error: Could not read patient data. Please ensure you are on the Dashboard tab.");
-                return;
-            }
+            if (!ageVal) { alert("Error: Could not read patient data."); return; }
 
-            const userInputs = {
-                'Age': ageVal,
-                'Risk_Classification': riskVal,
-                'BMBP': bmbpVal,
-                'FLT3.ITD': flt3Val,
-                'Chemotherapy': chemoVal,
-                'Gender': genderVal,
-                'Transplant': '0.0' // Overridden by backend
+            // Auto Risk
+            let riskVal = '2.0';
+            if (flt3Val === '1.0') riskVal = '3.0';
+            else if (npm1Val === '1.0') riskVal = '1.0';
+
+            const userInputs = { 
+                'Age': ageVal, 'Risk_Classification': riskVal, 
+                'BMBP': bmbpVal, 'FLT3.ITD': flt3Val, 'NPM1': npm1Val, 'Chemotherapy': chemoVal, 'Gender': genderVal, 'Transplant': '0.0' 
             };
-
-            const riskMap = {'1.0': 'Favorable', '2.0': 'Intermediate', '3.0': 'Adverse'};
+            
             const flt3Map = {'0.0': 'Wild Type', '1.0': 'Mutated'};
 
-            if (txProfileSummary) {
-                txProfileSummary.innerHTML = `
-                    <li style="margin-bottom:5px;"><strong>Age:</strong> ${ageVal} Years</li>
-                    <li style="margin-bottom:5px;"><strong>Risk:</strong> ${riskMap[riskVal] || riskVal}</li>
-                    <li style="margin-bottom:5px;"><strong>Genetics:</strong> ${flt3Map[flt3Val] || flt3Val}</li>
-                `;
-            }
+            if (txProfileSummary) txProfileSummary.innerHTML = `<li style="margin-bottom:5px;"><strong>Age:</strong> ${ageVal} Years</li><li style="margin-bottom:5px;"><strong>Risk:</strong> ${riskVal}</li><li style="margin-bottom:5px;"><strong>Genetics:</strong> ${flt3Map[flt3Val] || flt3Val}</li>`;
 
-            runTxBtn.disabled = true;
-            runTxBtn.textContent = 'Simulating Outcomes...';
-
+            runTxBtn.disabled = true; runTxBtn.textContent = 'Simulating Outcomes...';
             try {
-                const response = await fetch(TX_API_URL, {
+                const response = await fetch(TX_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_inputs: userInputs }) });
+                const res = await response.json();
+                if (response.ok) {
+                    const getProbAt = (curve, day) => { const point = curve.find(p => p.time >= day); return point ? point.probability : 0; };
+                    const chemo1yr = getProbAt(res.chemo_curve, 365);
+                    const tx1yr = getProbAt(res.transplant_curve, 365);
+                    
+                    // Metrics Calculation
+                    const riskReduction = ((tx1yr - chemo1yr) * 100).toFixed(1);
+                    const cureProb = (res.transplant_curve[res.transplant_curve.length-1].probability * 100).toFixed(1);
+
+                    if(txRiskReduction) { txRiskReduction.textContent = (riskReduction > 0 ? "+" : "") + riskReduction + "%"; txRiskReduction.className = `value ${riskReduction > 5 ? 'val-low' : 'val-neutral'}`; }
+                    if(txCureProb) { txCureProb.textContent = cureProb + "%"; txCureProb.className = `value ${cureProb > 50 ? 'val-low' : 'val-neutral'}`; }
+                    
+                    const traceChemo = { x: res.chemo_curve.map(d => d.time), y: res.chemo_curve.map(d => d.probability), mode: 'lines', name: 'Standard Chemotherapy', line: { color: '#94a3b8', width: 3, dash: 'dash' } };
+                    const traceTx = { x: res.transplant_curve.map(d => d.time), y: res.transplant_curve.map(d => d.probability), mode: 'lines', name: 'With Transplant', line: { color: '#111111', width: 4 } };
+                    const layout = { ...LIGHT_LAYOUT, title: null, xaxis: { ...LIGHT_LAYOUT.xaxis, title: 'Time (Days)' }, yaxis: { ...LIGHT_LAYOUT.yaxis, title: 'Survival Probability' }, margin: { t: 20, b: 40, l: 40, r: 20 }, legend: { orientation: 'h', y: 1.1 } };
+                    Plotly.newPlot('treatment-plot', [traceChemo, traceTx], layout, {displayModeBar: false, responsive: true});
+                    
+                    let analysis = "";
+                    if (riskReduction > 15) { analysis = `<strong>Strong Recommendation for Transplant:</strong> This patient shows a significant survival benefit (+${riskReduction}% reduction in relapse risk). `; if (flt3Val === '1.0') analysis += "The presence of the <strong>FLT3-ITD mutation</strong> makes standard chemotherapy less effective long-term. ASCT provides a curative immune effect. "; } 
+                    else if (riskReduction > 5) { analysis = `<strong>Moderate Benefit:</strong> Transplant offers a modest improvement (+${riskReduction}%) over chemotherapy. Weigh risks of GVHD. `; } 
+                    else { analysis = `<strong>Limited Benefit:</strong> The model predicts minimal survival gain from transplant (+${riskReduction}%). Standard chemotherapy consolidation may be sufficient.`; }
+                    document.getElementById('tx-analysis-text').innerHTML = analysis;
+                } else { alert("Simulation Error: " + res.error); }
+            } catch (err) { alert("Failed to connect."); } finally { runTxBtn.disabled = false; runTxBtn.textContent = 'SIMULATE OUTCOMES'; }
+        });
+    }
+    
+    // --- BULK ANALYSIS ---
+    const bulkForm = document.getElementById('bulk-upload-form');
+    const bulkResultsView = document.getElementById('bulk-results-view');
+    if (bulkForm) {
+        bulkForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const uploadBtn = document.getElementById('upload-btn');
+            const fileInput = document.getElementById('patient-file');
+            uploadBtn.disabled = true; uploadBtn.textContent = 'ANALYZING...';
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            try {
+                const response = await fetch('/api/bulk-analyze', { method: 'POST', body: formData });
+                const res = await response.json();
+                if (response.ok) {
+                    const data = res;
+                    document.getElementById('cohort-total').textContent = data.cohort_size;
+                    document.getElementById('cohort-avg-surv').textContent = data.average_2yr_survival + '%';
+                    const riskGroups = { 'Low Risk': 0, 'Intermediate': 0, 'High Risk': 0, 'Very High Risk': 0 };
+                    data.summary_table.forEach(p => { if (riskGroups[p.risk_group] !== undefined) riskGroups[p.risk_group]++; });
+                    const highRiskCount = riskGroups['High Risk'] + riskGroups['Very High Risk'];
+                    document.getElementById('cohort-high-risk').textContent = highRiskCount;
+                    const traces = [
+                        { x: data.best_case_curve.map(d => d.time), y: data.best_case_curve.map(d => d.probability), mode: 'lines', name: 'Best Case Survival', line: { color: '#10b981', width: 3 } },
+                        { x: data.worst_case_curve.map(d => d.time), y: data.worst_case_curve.map(d => d.probability), mode: 'lines', name: 'Worst Case Survival', line: { color: '#ef4444', width: 3, dash: 'dash' } }
+                    ];
+                    const layout = { ...LIGHT_LAYOUT, title: null, xaxis: { ...LIGHT_LAYOUT.xaxis, title: 'Time (Days)' }, yaxis: { ...LIGHT_LAYOUT.yaxis, title: 'Survival Probability' } };
+                    Plotly.newPlot('bulk-curve-plot', traces, layout, {displayModeBar: false, responsive: true});
+                    const pieData = [{ values: Object.values(riskGroups), labels: Object.keys(riskGroups), type: 'pie', hole: 0.4, marker: { colors: ['#10b981', '#f59e0b', '#ef4444', '#7f1d1d'] } }];
+                    const layoutPie = { ...LIGHT_LAYOUT, title: null, showlegend: true, margin: { t: 20, b: 20, l: 20, r: 20 } };
+                    Plotly.newPlot('bulk-pie-plot', pieData, layoutPie, {displayModeBar: false, responsive: true});
+                    document.getElementById('risk-factors-text').textContent = data.detailed_analysis.risk_factors;
+                    document.getElementById('treatment-suggestion-text').textContent = data.detailed_analysis.treatment_suggestion;
+                    bulkResultsView.style.display = 'block';
+                } else { alert("Analysis Failed: " + res.error); }
+            } catch (err) { alert("Connection failed."); } finally { uploadBtn.disabled = false; uploadBtn.textContent = 'ANALYZE COHORT'; }
+        });
+    }
+
+    // --- CLINICAL TRIALS ---
+    const findTrialsBtn = document.getElementById('find-trials-btn');
+    const trialsResults = document.getElementById('trials-results');
+    if (findTrialsBtn) {
+        findTrialsBtn.addEventListener('click', async () => {
+            const safeGetValue = (id) => { const el = document.getElementById(id); return el ? el.value : null; };
+            const userInputs = {
+                'Age': safeGetValue('age'),
+                'Risk_Classification': '2.0', 
+                'FLT3.ITD': safeGetValue('flt3'),
+                'NPM1': safeGetValue('npm1'),
+                'Transplant': safeGetValue('transplant')
+            };
+            const ageDisplay = document.getElementById('trial-age-display');
+            const flt3Display = document.getElementById('trial-flt3-display');
+            if (ageDisplay && userInputs['Age']) ageDisplay.textContent = userInputs['Age'];
+            if (flt3Display && userInputs['FLT3.ITD']) flt3Display.textContent = userInputs['FLT3.ITD'] === '1.0' ? 'Mutated' : 'Wild Type';
+            if (trialsResults) trialsResults.innerHTML = '<div class="stat-card" style="text-align: center; color: var(--text-medium);">Searching database...</div>';
+            try {
+                const response = await fetch(TRIALS_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_inputs: userInputs })
                 });
-
                 const res = await response.json();
-
-                if (response.ok) {
-                    const benefit = res.survival_benefit_2yr;
-                    const medGain = res.transplant_median - res.chemo_median;
-                    
-                    if(txBenefit) {
-                        txBenefit.textContent = (benefit > 0 ? "+" : "") + benefit + "%";
-                        txBenefit.className = `value ${benefit > 10 ? 'val-low' : (benefit < 0 ? 'val-high' : 'val-neutral')}`;
-                    }
-                    
-                    if(txMedianGain) {
-                        txMedianGain.textContent = (medGain > 0 ? "+" : "") + medGain + " Days";
-                        txMedianGain.className = `value ${medGain > 100 ? 'val-low' : 'val-neutral'}`;
-                    }
-
-                    const traceChemo = {
-                        x: res.chemo_curve.map(d => d.time),
-                        y: res.chemo_curve.map(d => d.probability),
-                        mode: 'lines', name: 'Standard Chemotherapy',
-                        line: { color: '#94a3b8', width: 3, dash: 'dash' }
-                    };
-
-                    const traceTx = {
-                        x: res.transplant_curve.map(d => d.time),
-                        y: res.transplant_curve.map(d => d.probability),
-                        mode: 'lines', name: 'With Transplant',
-                        line: { color: '#2563eb', width: 4 }
-                    };
-
-                    const layout = {
-                        ...LIGHT_LAYOUT,
-                        title: { text: 'Survival Benefit: Chemo vs. Transplant', font: {size: 16} },
-                        xaxis: { ...LIGHT_LAYOUT.xaxis, title: 'Time (Days)' },
-                        yaxis: { ...LIGHT_LAYOUT.yaxis, title: 'Survival Probability' }
-                    };
-
-                    Plotly.newPlot('treatment-plot', [traceChemo, traceTx], layout, {displayModeBar: false, responsive: true});
-
+                if (response.ok && res.trials && res.trials.length > 0) {
+                    trialsResults.innerHTML = res.trials.map(t => `
+                        <div class="stat-card" style="text-align: left; border-left: 4px solid var(--primary-brand); margin-bottom: 10px;">
+                            <div style="display:flex; justify-content:space-between;">
+                                <h4 style="color: var(--primary-brand); margin-bottom: 5px;">${t.phase} • ${t.mechanism}</h4>
+                                <span class="badge" style="background:#d1fae5; color:#065f46;">${t.score} Match</span>
+                            </div>
+                            <div class="value" style="font-size: 1.1rem; margin-top:5px;">${t.title}</div>
+                            <p style="font-size: 0.9rem; color: var(--text-dark); margin: 5px 0;">${t.description}</p>
+                            <div style="font-size: 0.85rem; color: var(--text-medium); margin-top: 5px;">ID: <a href="https://clinicaltrials.gov/study/${t.id}" target="_blank" style="color:var(--primary-brand); text-decoration:none;">${t.id}</a> • Status: ${t.status}</div>
+                        </div>
+                    `).join('');
                 } else {
-                    alert("Simulation Error: " + res.error);
+                    trialsResults.innerHTML = '<div class="stat-card" style="text-align: left; color: var(--text-medium);">No specific trials found for this profile. Standard of care recommended.</div>';
                 }
-            } catch (err) {
-                console.error(err);
-                alert("Failed to connect to simulation server.");
-            } finally {
-                runTxBtn.disabled = false;
-                runTxBtn.textContent = 'SIMULATE OUTCOMES';
+            } catch (e) {
+                console.error(e);
+                if (trialsResults) trialsResults.innerHTML = '<div class="stat-card" style="text-align: left; color: var(--risk-high);">Error fetching trials.</div>';
             }
         });
     }
 
-    // =================================================
-    // PART 5: NAVIGATION LOGIC
-    // =================================================
+    // --- NAVIGATION ---
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -423,72 +378,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // =================================================
-    // PART 6: CLINICAL TRIAL MATCHING (Tab 4)
-    // =================================================
-    
-    // Mock Database
-    const TRIAL_DATABASE = [
-        { id: "NCT043289", title: "Novel FLT3 Inhibitor for Relapsed AML", criteria: (p) => p['FLT3.ITD'] === '1.0', type: "Targeted Therapy" },
-        { id: "NCT055210", title: "Reduced-Intensity Conditioning for Elderly Patients", criteria: (p) => p['Age'] > 60, type: "Transplant Protocol" },
-        { id: "NCT038472", title: "Post-Transplant Maintenance Therapy", criteria: (p) => p['Transplant'] === '1.0', type: "Maintenance" },
-        { id: "NCT011239", title: "High-Dose Cytarabine Optimization", criteria: (p) => p['Risk_Classification'] === '3.0', type: "Chemotherapy" },
-        { id: "NCT099821", title: "Long-Term Follow-up of AML Survivors", criteria: (p) => true, type: "Observational" } 
-    ];
-
-    const findTrialsBtn = document.getElementById('find-trials-btn');
-    const trialsResults = document.getElementById('trials-results');
-
-    if (findTrialsBtn) {
-        findTrialsBtn.addEventListener('click', () => {
-            const safeGetValue = (id) => {
-                const el = document.getElementById(id);
-                return el ? el.value : null;
-            };
-
-            const patientProfile = {
-                'Age': safeGetValue('age'),
-                'Risk_Classification': safeGetValue('risk_class'),
-                'FLT3.ITD': safeGetValue('flt3'),
-                'Transplant': safeGetValue('transplant')
-            };
-
-            const ageDisplay = document.getElementById('trial-age-display');
-            const flt3Display = document.getElementById('trial-flt3-display');
-            if (ageDisplay) ageDisplay.textContent = patientProfile['Age'];
-            if (flt3Display) flt3Display.textContent = patientProfile['FLT3.ITD'] === '1.0' ? 'Mutated' : 'Wild Type';
-
-            const matches = TRIAL_DATABASE.filter(trial => trial.criteria(patientProfile));
-
-            if (trialsResults) {
-                trialsResults.innerHTML = matches.map(t => `
-                    <div class="stat-card" style="text-align: left; border-left: 4px solid var(--primary-brand); margin-bottom: 10px;">
-                        <h4 style="color: var(--primary-brand); margin-bottom: 5px;">${t.type}</h4>
-                        <div class="value" style="font-size: 1.1rem;">${t.title}</div>
-                        <div style="font-size: 0.85rem; color: var(--text-medium); margin-top: 5px;">ID: ${t.id} • Status: Recruiting</div>
-                    </div>
-                `).join('');
-            }
-        });
-    }
-
-    // --- Master Reset Logic ---
     resetBtn.onclick = () => { 
         form.reset(); 
         document.getElementById('out-age').value = "45";
         document.getElementById('out-bmbp').value = "15";
-
-        Plotly.purge('survival-plot');
-        Plotly.purge('radar-plot');
+        Plotly.purge('survival-plot'); Plotly.purge('radar-plot'); Plotly.purge('treatment-plot'); Plotly.purge('bulk-curve-plot'); Plotly.purge('bulk-pie-plot');
+        if(document.getElementById('bold-analysis-container')) document.getElementById('bold-analysis-container').style.display = 'none';
+        if(document.getElementById('bulk-results-view')) document.getElementById('bulk-results-view').style.display = 'none';
         if(driversList) driversList.innerHTML = '<span class="driver-placeholder">Run analysis to identify key clinical drivers.</span>';
-        
-        cards.forEach(c => { c.value.textContent = "--"; c.value.className = "value val-neutral"; });
+        cards.forEach(c => { c.value.textContent = "--"; c.value.className = "value val-neutral"; c.container.style.display = 'block'; });
         statusMsg.textContent = "Dashboard Reset.";
-        
-        if(document.getElementById('treatment-plot')) Plotly.purge('treatment-plot');
-        if(document.getElementById('tx-benefit')) document.getElementById('tx-benefit').textContent = "--%";
-        if(document.getElementById('tx-median-gain')) document.getElementById('tx-median-gain').textContent = "-- Days";
-
-        if(trialsResults) trialsResults.innerHTML = '<div class="stat-card" style="text-align: left; color: var(--text-medium);">No trials loaded. Click "Find Matching Trials" to search the database.</div>';
+        if(document.getElementById('tx-risk-reduction')) document.getElementById('tx-risk-reduction').textContent = "--%";
+        if(document.getElementById('tx-cure-prob')) document.getElementById('tx-cure-prob').textContent = "--%";
+        if(trialsResults) trialsResults.innerHTML = '<div class="stat-card" style="text-align: left; color: var(--text-medium);">No trials loaded. Click "Find Matching Trials".</div>';
     };
 });
