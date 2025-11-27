@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leukemia Prognosis</title>
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
@@ -16,8 +16,8 @@
         <div class="logo-area">
             <i class="fa-solid fa-dna logo-icon"></i>
             <div class="logo-text">
-                <h1>leukemia<span class="highlight">analysis</span></h1>
-                <small>AML Survival prognostics</small>
+                <h1>Leukemia<span class="highlight"> Analysis</span></h1>
+                <small>AML Survival Prognosis</small>
             </div>
         </div>
         <nav class="main-nav">
@@ -30,53 +30,76 @@
     </header>
 
     <main class="app-container">
-
+        
         <section id="home" class="tab-content active">
-            <div class="hero-section">
-                <div class="hero-content">
-                    <h2>Precision Prognostics.<br>Simplified.</h2>
-                    <p>A specialized decision support system for Acute Myeloid Leukemia. Integrate patient genomics with DeepHit & Logistic Hazard models to predict outcomes.</p>
-                    <button class="btn-primary btn-lg" onclick="document.querySelector('[data-tab=\'analysis\']').click()">
-                        Start New Analysis <i class="fa-solid fa-chevron-right"></i>
-                    </button>
-                </div>
+            <div class="hero-modern">
+                <div class="hero-badge">Advanced Leukemia Prognostics</div>
+                <h2 class="gradient-text">Predict. Analyze. Optimize.</h2>
+                <p class="hero-subtext">
+                    A prognostic tool designed specifically for <strong>Acute Myeloid Leukemia (AML)</strong>. 
+                    Transform complex clinical data into survival insights.
+                </p>
+                <button class="btn-glow" onclick="document.querySelector('[data-tab=\'analysis\']').click()">
+                    Launch Analysis <span>→</span>
+                </button>
             </div>
 
-            <div class="workflow-section">
+            <div class="workflow-section" style="margin-bottom: 50px;">
                 <h3 class="section-title">Analysis Workflow</h3>
                 <div class="workflow-steps">
                     <div class="step-card">
                         <div class="step-icon"><i class="fa-solid fa-sliders"></i></div>
                         <h4>1. Input Profile</h4>
-                        <p>Enter clinical & genetic data (Age, FLT3, NPM1, etc.).</p>
+                        <p>Enter patient demographics, <strong>FLT3/NPM1</strong> status, and clinical markers.</p>
                     </div>
                     <div class="step-arrow"><i class="fa-solid fa-arrow-right-long"></i></div>
                     <div class="step-card">
                         <div class="step-icon"><i class="fa-solid fa-brain"></i></div>
                         <h4>2.Prediction</h4>
-                        <p>Deep learning models generate survival curves.</p>
+                        <p><strong>DeepHit</strong> & <strong>LogHazard</strong> models compute survival probability.</p>
                     </div>
                     <div class="step-arrow"><i class="fa-solid fa-arrow-right-long"></i></div>
                     <div class="step-card">
                         <div class="step-icon"><i class="fa-solid fa-chart-line"></i></div>
-                        <h4>3. View Insights</h4>
-                        <p>Analyze risk scores, survival estimates, and drivers.</p>
+                        <h4>3. Clinical Insights</h4>
+                        <p>Review risk stratification, treatment simulations, and matched trials.</p>
                     </div>
                 </div>
             </div>
 
-            <div class="context-section">
-                <div class="context-card">
-                    <h3><i class="fa-solid fa-notes-medical"></i> Clinical Context: AML</h3>
-                    <p>Acute Myeloid Leukemia (AML) is an aggressive blood cancer that starts in the bone marrow, where faulty young white blood cells multiply rapidly and push out the healthy cells needed for oxygen transport, clotting, and infection defense.</p>
-                    <h4 style="margin-top: 1rem;">Key Prognostic Factors</h4>
-                    <ul class="marker-list">
-                        <li><strong>FLT3-ITD:</strong> A common mutation associated with higher relapse risk and inferior overall survival.</li>
-                        <li><strong>NPM1:</strong> Presence of NPM1 mutation without FLT3-ITD is a favorable prognostic indicator.</li>
-                        <li><strong>BMBP:</strong> Bone Marrow Blast Percentage indicates tumor burden; higher percentages generally correlate with poorer outcomes.</li>
-                        <li><strong>Transplant:</strong> Allogeneic Stem Cell Transplant is often a curative option for intermediate and high-risk patients.</li>
-                    </ul>
+            <div class="glass-panel" style="margin-bottom: 40px; max-width: 1000px; margin-left: auto; margin-right: auto;">
+                <h3 style="text-align: center; margin-bottom: 30px; border: none; text-transform: uppercase; font-size: 1rem; letter-spacing: 1px; color: var(--text-light);">Clinical Context</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items: start;">
+                    <div>
+                        <h4 style="color: var(--text-dark); margin-bottom: 15px; font-size: 1.2rem;"><i class="fa-solid fa-microscope" style="color:var(--primary); margin-right:8px;"></i> Pathophysiology</h4>
+                        <p style="line-height: 1.8; color: var(--text-medium); margin-bottom: 20px;">
+                            Leukemia is a cancer of <strong>blood and bone marrow</strong>, in which abnormal white blood cells multiply uncontrollably, crowding out healthy red blood cells and platelets.
+                        </p>
+                        <h4 style="color: var(--text-dark); margin-bottom: 10px; font-size: 1.1rem;">The 4 Main Classifications</h4>
+                        <ul class="marker-list">
+                            <li><strong>AML</strong> - Rapid progression; myeloid line.</li>
+                            <li><strong>ALL</strong> - Rapid progression; lymphoid line.</li>
+                            <li><strong>CML</strong> - Slow progression; myeloid line.</li>
+                            <li><strong>CLL</strong> - Slow progression; lymphoid line.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 style="color: var(--text-dark); margin-bottom: 15px; font-size: 1.2rem;"><i class="fa-solid fa-bullseye" style="color:var(--primary); margin-right:8px;"></i> Why Focus on AML?</h4>
+                        <p style="line-height: 1.8; color: var(--text-medium); margin-bottom: 20px;">
+                            <strong>Acute Myeloid Leukemia (AML)</strong> is the most common acute leukemia in adults. Outcomes vary wildly based on cytogenetics.
+                        </p>
+                        <div style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 15px; border-radius: 4px;">
+                            <p style="font-size: 0.9rem; color: #064e3b; margin: 0;">
+                                <strong>Advantage:</strong> This platform integrates <strong>Age, Blast %, Genetics, and Transplant Status</strong> to provide personalized survival curves beyond standard staging.
+                            </p>
+                        </div>
+                    </div>
                 </div>
+            </div>
+
+            <div class="home-disclaimer">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <p><strong>Medical Disclaimer:</strong> This tool is for <strong>educational and research purposes only</strong>. It does not constitute a formal medical diagnosis. Always consult with a qualified oncologist.</p>
             </div>
         </section>
 
@@ -112,17 +135,17 @@
                             </div>
                             <div class="input-row">
                                 <div class="field">
-                                    <label>FLT3-ITD</label>
+                                    <label>FLT3-ITD Status</label>
                                     <select id="flt3" name="FLT3.ITD">
-                                        <option value="0.0">Wild Type</option>
-                                        <option value="1.0">Mutated</option>
+                                        <option value="0.0" selected>Wild Type (-)</option>
+                                        <option value="1.0">Mutated (+)</option>
                                     </select>
                                 </div>
                                 <div class="field">
-                                    <label>NPM1</label>
+                                    <label>NPM1 Mutation</label>
                                     <select id="npm1" name="NPM1">
-                                        <option value="0.0">Wild Type</option>
-                                        <option value="1.0">Mutated</option>
+                                        <option value="0.0">Wild Type (-)</option>
+                                        <option value="1.0">Mutated (+)</option>
                                     </select>
                                 </div>
                             </div>
@@ -153,49 +176,36 @@
                         <p id="status-msg">Ready</p>
                     </form>
                 </aside>
+
                 <div class="main-panel">
                     <div class="stats-row">
-                        <div class="stat-card-pro">
+                        <div class="stat-card-pro gradient-1">
                             <div class="card-icon icon-blue"><i class="fa-solid fa-chart-pie"></i></div>
-                            <div class="card-content">
-                                <h4 id="card-title-1">Risk Stratification</h4>
-                                <span class="stat-val" id="res-value-1">--</span>
-                            </div>
+                            <div class="card-content"><h4 id="card-title-1">Risk Stratification</h4><span class="stat-val" id="res-value-1">--</span></div>
                         </div>
-                        <div class="stat-card-pro">
+                        <div class="stat-card-pro gradient-2">
                             <div class="card-icon icon-purple"><i class="fa-solid fa-hourglass-end"></i></div>
-                            <div class="card-content">
-                                <h4 id="card-title-2">Median Survival</h4>
-                                <span class="stat-val" id="res-value-2">--</span>
-                            </div>
+                            <div class="card-content"><h4 id="card-title-2">Median Survival</h4><span class="stat-val" id="res-value-2">--</span></div>
                         </div>
-                        <div class="stat-card-pro">
+                        <div class="stat-card-pro gradient-3">
                             <div class="card-icon icon-green"><i class="fa-solid fa-arrow-trend-up"></i></div>
-                            <div class="card-content">
-                                <h4 id="card-title-3">Cohort Standing</h4>
-                                <span class="stat-val" id="res-value-3">--</span>
-                            </div>
+                            <div class="card-content"><h4 id="card-title-3">Cohort Standing</h4><span class="stat-val" id="res-value-3">--</span></div>
                         </div>
-                        <div class="stat-card-pro">
+                        <div class="stat-card-pro gradient-4">
                             <div class="card-icon icon-orange"><i class="fa-solid fa-notes-medical"></i></div>
-                            <div class="card-content">
-                                <h4 id="card-title-4">Condition Severity</h4>
-                                <span class="stat-val" id="res-value-4">--</span>
-                            </div>
+                            <div class="card-content"><h4 id="card-title-4">Condition Severity</h4><span class="stat-val" id="res-value-4">--</span></div>
                         </div>
                     </div>
                     <div class="drivers-bar">
                         <span><i class="fa-solid fa-tags"></i> Drivers:</span>
-                        <div id="drivers-list" class="drivers-content">
-                            <span class="tag-empty">Waiting for analysis...</span>
-                        </div>
+                        <div id="drivers-list" class="drivers-content"><span class="tag-empty">Waiting for analysis...</span></div>
                     </div>
                     <div class="charts-row">
                         <div class="chart-box large"><div id="survival-plot" style="height: 400px;"></div></div>
                         <div class="chart-box small"><div id="radar-plot" style="height: 400px;"></div></div>
                     </div>
                     <div id="bold-analysis-container" class="ai-box" style="display:none;">
-                        <div class="ai-header"><i class="fa-solid fa-microchip"></i> AI Insight</div>
+                        <div class="ai-header"><i class="fa-solid fa-microchip"></i> Insight</div>
                         <p id="bold-analysis-text"></p>
                     </div>
                 </div>
@@ -214,17 +224,11 @@
                     <div class="stats-row half">
                         <div class="stat-card-pro">
                             <div class="card-icon icon-green"><i class="fa-solid fa-shield-virus"></i></div>
-                            <div class="card-content">
-                                <h4>Relapse Risk Reduction</h4>
-                                <span class="stat-val val-positive" id="tx-risk-reduction">--%</span>
-                            </div>
+                            <div class="card-content"><h4>Relapse Risk Reduction</h4><span class="stat-val val-positive" id="tx-risk-reduction">--%</span></div>
                         </div>
                         <div class="stat-card-pro">
                             <div class="card-icon icon-blue"><i class="fa-solid fa-heart-pulse"></i></div>
-                            <div class="card-content">
-                                <h4>Cure Probability</h4>
-                                <span class="stat-val val-positive" id="tx-cure-prob">--%</span>
-                            </div>
+                            <div class="card-content"><h4>Cure Probability</h4><span class="stat-val val-positive" id="tx-cure-prob">--%</span></div>
                         </div>
                     </div>
                     <div class="chart-box"><div id="treatment-plot" style="height: 400px;"></div></div>
@@ -236,35 +240,48 @@
             </div>
         </section>
 
-        <section id="bulk" class="tab-content">
-            <div class="center-panel">
-                <h2>Cohort Analysis</h2>
-                <div class="upload-zone">
-                    <form id="bulk-upload-form">
-                        <i class="fa-solid fa-cloud-arrow-up"></i>
-                        <p>Upload Patient CSV</p>
-                        <input type="file" id="patient-file" name="file" accept=".csv, .tsv" required>
-                        <button type="submit" id="upload-btn" class="btn-primary">Analyze</button>
-                    </form>
-                </div>
-                <div id="bulk-results-view" style="display:none; margin-top: 30px; width: 100%;">
-                    <div class="stats-row thirds">
-                        <div class="stat-card-pro"><div class="card-content"><h4>Patients</h4><span id="cohort-total" class="stat-val">--</span></div></div>
-                        <div class="stat-card-pro"><div class="card-content"><h4>Avg Survival</h4><span id="cohort-avg-surv" class="stat-val">--</span></div></div>
-                        <div class="stat-card-pro"><div class="card-content"><h4>High Risk</h4><span id="cohort-high-risk" class="stat-val val-negative">--</span></div></div>
-                    </div>
-                    <div class="charts-row">
-                        <div class="chart-box"><div id="bulk-curve-plot" style="height: 350px;"></div></div>
-                        <div class="chart-box"><div id="bulk-pie-plot" style="height: 350px;"></div></div>
-                    </div>
-                    <div class="ai-box">
-                        <p id="risk-factors-text"></p>
-                        <p id="treatment-suggestion-text"></p>
-                    </div>
-                </div>
-            </div>
-        </section>
+<section id="bulk" class="tab-content">
+    <div class="center-panel">
+        <h2>Cohort Analysis (Max 10 Patients)</h2> <div class="upload-zone">
+            <form id="bulk-upload-form">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <p>Upload Patient CSV</p>
+                <input type="file" id="patient-file" name="file" accept=".csv, .tsv" required>
+                <button type="submit" id="upload-btn" class="btn-primary">Analyze Cohort</button>
+            </form>
+        </div>
 
+        <div id="bulk-results-view" style="display:none; margin-top: 30px; width: 100%;">
+            <div class="stats-row thirds">
+                <div class="stat-card-pro"><div class="card-content"><h4>Patients</h4><span id="cohort-total" class="stat-val">--</span></div></div>
+                <div class="stat-card-pro"><div class="card-content"><h4>Avg Survival</h4><span id="cohort-avg-surv" class="stat-val">--</span></div></div>
+                <div class="stat-card-pro"><div class="card-content"><h4>High Risk</h4><span id="cohort-high-risk" class="stat-val val-negative">--</span></div></div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-box"><div id="bulk-curve-plot" style="height: 350px;"></div></div>
+                <div class="chart-box"><div id="bulk-pie-plot" style="height: 350px;"></div></div>
+            </div>
+
+            <h3 style="margin: 40px 0 20px; text-align: left; border-bottom: 2px solid var(--border); padding-bottom: 10px;">
+                <i class="fa-solid fa-people-group" style="color:var(--primary);"></i> Individual Deep Dive
+            </h3>
+            
+            <div class="chart-box" style="margin-bottom: 30px;">
+                <div id="bulk-scatter-plot" style="height: 350px;"></div>
+            </div>
+
+            <div id="patient-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; text-align: left;">
+                </div>
+            <div class="ai-box" style="margin-top: 30px;">
+                <p id="risk-factors-text"></p>
+                <p id="treatment-suggestion-text"></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+      
         <section id="trials" class="tab-content">
             <div class="center-panel">
                 <h2>Trial Matching</h2>
@@ -273,10 +290,8 @@
                         <span>Matching for: <strong id="trial-age-display">--</strong> / <strong id="trial-flt3-display">--</strong></span>
                     </div>
                     <div class="btn-group">
-                        <button id="find-trials-btn" class="btn-primary">Find Trials</button>
-                        <a href="https://www.google.com/maps/search/oncology+center+near+me" target="_blank" class="btn-secondary">
-                            <i class="fa-solid fa-location-dot"></i> Find Clinics
-                        </a>
+                        <button id="find-trials-btn" class="btn-primary">Search Database</button>
+                        <a href="https://www.google.com/maps/search/oncology+center+near+me" target="_blank" class="btn-secondary"><i class="fa-solid fa-location-dot"></i> Find Clinics</a>
                     </div>
                 </div>
                 <div id="trials-results" class="trials-list">
@@ -285,7 +300,7 @@
             </div>
         </section>
 
-    </main>
+        </main>
 
     <script src="script.js"></script>
 </body>
