@@ -54,50 +54,29 @@ def load_all_artifacts():
 
 load_all_artifacts()
 
-# --- UPDATED CLINICAL BOOST LOGIC ---
+# --- Helper Functions ---
 def calculate_clinical_boost(user_data):
-    """
-    Calculates survival boost based on EXTENDED profile.
-    Includes CEBPA, IDH1/2, NPM1, DNMT3A, and Targeted Therapy.
-    """
     boost = 0.0
-    
-    # 1. Transplant (The 'Curative' Factor)
     if user_data.get('Transplant') == 1.0: boost += 0.65
-    
-    # 2. Age & Physicality
     age = user_data.get('Age', 60)
     if age < 30: boost += 0.15
     elif age < 50: boost += 0.05
     elif age > 70: boost -= 0.15
-    
-    # 3. Standard Risk
     risk = user_data.get('Risk_Classification', 2.0)
     if risk == 1.0: boost += 0.15
     elif risk == 3.0: boost -= 0.15
-    
     bmbp = user_data.get('BMBP', 50)
     if bmbp < 20: boost += 0.10
     elif bmbp > 80: boost -= 0.10
-
-    # 4. NEW: Advanced Genetic Modifiers
-    # Favorable Mutations
+    
+    # Advanced Genetics
     if user_data.get('NP1') == 1.0 or user_data.get('NPM1') == 1.0: boost += 0.08
     if user_data.get('CEBPA') == 1.0: boost += 0.08
-    
-    # Adverse Mutations
     if user_data.get('DNMT3A') == 1.0: boost -= 0.05
-    
-    # Targeted Therapy Effect (Boosts survival if relevant mutations exist)
     if user_data.get('Targeted_Therapy') == 1.0:
-        # IDH inhibitors are effective
-        if user_data.get('IDH1') == 1.0 or user_data.get('IDH2') == 1.0:
-            boost += 0.10 
-        # FLT3 inhibitors are effective (offsetting the FLT3 penalty)
-        elif user_data.get('FLT3.ITD') == 1.0:
-            boost += 0.12
-        else:
-            boost += 0.05 # General benefit
+        if user_data.get('IDH1') == 1.0 or user_data.get('IDH2') == 1.0: boost += 0.10 
+        elif user_data.get('FLT3.ITD') == 1.0: boost += 0.12
+        else: boost += 0.05
             
     return boost
 
@@ -118,9 +97,7 @@ def prepare_input(user_data: Dict[str, Any]) -> np.ndarray:
     base_values = np.array([np.random.normal(m, s * 0.1) for m, s in zip(mu, sigma)])
 
     for key, value in user_data.items():
-        # Normalize keys
         if key == 'NPM1': key = 'NP1'
-        
         if key in all_features:
             idx = all_features.index(key)
             base_values[idx] = value
@@ -191,59 +168,51 @@ def predict_survival(user_data: Dict[str, Any], model_type: str) -> Dict[str, An
     survival_fn = interp1d(time_points, survival_probabilities, kind='linear', fill_value='extrapolate')
 
     fixed_probs = {
-        "1_year": max(0.0, min(1.0, float(survival_fn(365)))),
-        "2_years": max(0.0, min(1.0, float(survival_fn(730)))),
-        "3_years": max(0.0, min(1.0, float(survival_fn(1095))))
+        "1_year": float(max(0.0, min(1.0, float(survival_fn(365))))),
+        "2_years": float(max(0.0, min(1.0, float(survival_fn(730))))),
+        "3_years": float(max(0.0, min(1.0, float(survival_fn(1095)))))
     }
     
     drivers = []
     if user_data.get('Transplant') == 1.0: drivers.append("Transplant (+)")
     if user_data.get('Age', 60) < 40: drivers.append("Young Age (+)")
     if user_data.get('NP1') == 1.0 or user_data.get('NPM1') == 1.0: drivers.append("NPM1 Mutated (+)")
-    if user_data.get('CEBPA') == 1.0: drivers.append("CEBPA Mutated (+)")
-    
+    if user_data.get('Targeted_Therapy') == 1.0: drivers.append("Targeted Tx (+)")
     if user_data.get('Risk_Classification') == 3.0: drivers.append("Adverse Risk (-)")
     if user_data.get('DNMT3A') == 1.0: drivers.append("DNMT3A Mutated (-)")
     if user_data.get('FLT3.ITD') == 1.0: drivers.append("FLT3-ITD (-)")
-    
     if not drivers: drivers.append("Average Profile")
 
     return {
-        "survival_curve": [{"time": t, "probability": p} for t, p in zip(time_points, survival_probabilities)],
-        "hazard_curve": [{"time": t, "probability": p} for t, p in zip(time_points, hazard_curve)] if model_type == 'loghazard' else [],
+        "survival_curve": [{"time": float(t), "probability": float(p)} for t, p in zip(time_points, survival_probabilities)],
+        "hazard_curve": [{"time": float(t), "probability": float(p)} for t, p in zip(time_points, hazard_curve)] if model_type == 'loghazard' else [],
         "risk_group": risk_label,
         "risk_css": risk_css,
-        "median_survival_time_days": round(median_time, 0),
-        "raw_risk_score_2yr": round(1 - prob_2yr, 4),
+        "median_survival_time_days": float(round(median_time, 0)),
+        "raw_risk_score_2yr": float(round(1 - prob_2yr, 4)),
         "fixed_time_survival": fixed_probs,
         "drivers": drivers
     }
 
-# --- BULK ANALYSIS (Updated for New Features) ---
+# --- BULK ANALYSIS ---
 def bulk_process_patients(df_new_patients: pd.DataFrame):
     model = ARTIFACTS['deephit_model']
     labtrans = ARTIFACTS['labtrans_dh']
     
     patient_results = []
-    
-    # Stats Tracking
     high_risk_count = 0
     flt3_count = 0
     dnmt3a_count = 0
     npm1_count = 0
+    transplant_count = 0
     
     for index, patient_row in df_new_patients.iterrows():
         current_data = patient_row.to_dict()
-        
-        # Flexible Key Mapping
         clean_data = {}
         for k, v in current_data.items():
-            try:
-                clean_data[k] = float(v)
-            except:
-                clean_data[k] = v
+            try: clean_data[k] = float(v)
+            except: clean_data[k] = v
         
-        # Normalize Column Names if CSV headers vary
         if 'NPM1' in clean_data: clean_data['NP1'] = clean_data['NPM1']
 
         X_pred = prepare_input(clean_data)
@@ -264,45 +233,67 @@ def bulk_process_patients(df_new_patients: pd.DataFrame):
         target_idx = np.argmin(np.abs(labtrans.cuts - 730))
         prob_2yr = adjusted_probs[target_idx] if target_idx < len(adjusted_probs) else 0
         
-        risk_label, _ = get_risk_label(prob_2yr)
+        # Get label AND css class for UI
+        risk_label, risk_css = get_risk_label(prob_2yr)
         
-        # Stats
+        # --- INDIVIDUAL PATIENT ANALYSIS ---
+        drivers = []
+        if clean_data.get('Transplant') == 1.0: drivers.append("Transplant (+)")
+        if clean_data.get('Age', 60) < 40: drivers.append("Young Age (+)")
+        elif clean_data.get('Age', 60) > 70: drivers.append("Elderly (-)")
+        if clean_data.get('NP1') == 1.0: drivers.append("NPM1 Mut (+)")
+        if clean_data.get('FLT3.ITD') == 1.0: drivers.append("FLT3-ITD (-)")
+        if clean_data.get('DNMT3A') == 1.0: drivers.append("DNMT3A (-)")
+        if not drivers: drivers.append("Standard Profile")
+
+        # Generate a mini-insight string
+        insight = "Stable trajectory."
+        if prob_2yr < 0.4: insight = "Rapid progression risk. Consider trials."
+        elif clean_data.get('FLT3.ITD') == 1.0 and clean_data.get('Transplant') != 1.0: insight = "FLT3+ requires aggressive intervention."
+        elif prob_2yr > 0.8: insight = "Excellent prognosis predicted."
+        
+        # Track stats
         if risk_label in ["High Risk", "Very High Risk"]: high_risk_count += 1
         if clean_data.get('FLT3.ITD') == 1.0: flt3_count += 1
         if clean_data.get('DNMT3A') == 1.0: dnmt3a_count += 1
         if clean_data.get('NP1') == 1.0: npm1_count += 1
+        if clean_data.get('Transplant') == 1.0: transplant_count += 1
         
         patient_results.append({
             'id': str(current_data.get('PatientID', f"PT-{index+1}")),
             'age': current_data.get('Age', 'N/A'),
-            'survival_2yr': round(prob_2yr * 100, 1),
+            'survival_2yr': float(round(prob_2yr * 100, 1)),
             'risk_group': risk_label,
-            'curve_data': [{'time': t, 'probability': p} for t, p in zip(labtrans.cuts.tolist(), adjusted_probs.tolist())]
+            'risk_css': risk_css,
+            'drivers': drivers,
+            'insight': insight,
+            'curve_data': [{'time': float(t), 'probability': float(p)} for t, p in zip(labtrans.cuts.tolist(), adjusted_probs.tolist())]
         })
 
     survival_rates = [p['survival_2yr'] for p in patient_results]
     best_curve = max(patient_results, key=lambda x: x['survival_2yr'])['curve_data']
     worst_curve = min(patient_results, key=lambda x: x['survival_2yr'])['curve_data']
     
-    # Dynamic Insights
     cohort_size = len(patient_results)
     risk_pct = (high_risk_count / cohort_size) * 100
+    flt3_pct = (flt3_count / cohort_size) * 100
+    dnmt3a_pct = (dnmt3a_count / cohort_size) * 100
     
     risk_text = f"Cohort Analysis: {risk_pct:.0f}% of patients are High Risk. "
-    if flt3_pct := (flt3_count / cohort_size * 100) > 30:
+    if flt3_pct > 30:
         risk_text += f"High FLT3-ITD prevalence ({flt3_pct:.0f}%) drives this risk. "
-    if dnmt3a_pct := (dnmt3a_count / cohort_size * 100) > 20:
-        risk_text += f"DNMT3A mutations are present in {dnmt3a_pct:.0f}% of cases, suggesting epigenetic therapy targets. "
+    if dnmt3a_pct > 20:
+        risk_text += f"DNMT3A mutations are present in {dnmt3a_pct:.0f}% of cases. "
         
     tx_text = "Recommendation: "
     if npm1_count > flt3_count:
         tx_text += "High prevalence of NPM1 mutations without FLT3 suggests favorable response to standard chemotherapy. "
     else:
-        tx_text += "Complex genetic profiles (FLT3/DNMT3A) indicate strong need for Targeted Therapy (e.g., Midostaurin) and evaluation for Transplant."
+        tx_text += "Complex genetic profiles (FLT3/DNMT3A) indicate strong need for Targeted Therapy and evaluation for Transplant."
 
     return {
-        'cohort_size': cohort_size,
-        'average_2yr_survival': round(np.mean(survival_rates), 1),
+        'cohort_size': int(cohort_size),
+        'average_2yr_survival': float(round(np.mean(survival_rates), 1)),
         'summary_table': patient_results,
         'best_case_curve': best_curve,
         'worst_case_curve': worst_curve,
